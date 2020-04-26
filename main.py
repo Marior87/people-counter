@@ -29,6 +29,7 @@ import cv2
 
 import logging as log
 import paho.mqtt.client as mqtt
+import utils
 
 from argparse import ArgumentParser
 from inference import Network
@@ -51,7 +52,7 @@ def build_argparser():
     parser.add_argument("-m", "--model", required=True, type=str,
                         help="Path to an xml file with a trained model.")
     parser.add_argument("-i", "--input", required=True, type=str,
-                        help="Path to image or video file")
+                        help="Path to image or video file. Use webcam to use webcam stream")
     parser.add_argument("-l", "--cpu_extension", required=False, type=str,
                         default=None,
                         help="MKLDNN (CPU)-targeted custom layers."
@@ -70,7 +71,8 @@ def build_argparser():
 
 def connect_mqtt():
     ### TODO: Connect to the MQTT client ###
-    client = None
+    client = mqtt.Client()
+    client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
 
     return client
 
@@ -90,20 +92,105 @@ def infer_on_stream(args, client):
     prob_threshold = args.prob_threshold
 
     ### TODO: Load the model through `infer_network` ###
+    infer_network.load_model(args.model, device=args.device, cpu_extension=args.cpu_extension)
+
+    # We need model required input dimensions:
+    required_input_shape = infer_network.get_input_shape()
+    required_input_width = required_input_shape[2]
+    required_input_height = required_input_shape[3]
 
     ### TODO: Handle the input stream ###
+    if args.input != 'webcam':
+        # It seems that OpenCV can use VideoCapture to treat videos and images:
+        input_stream = cv2.VideoCapture(args.input)
+
+    else:
+        print('Using stream from webcam')
+        input_stream = cv2.VideoCapture(0)
+
+    # We need fps for time calculation:
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # We also need input stream width and height:
+    stream_width = int(input_stream.get(3))
+    stream_ height = int(input_stream.get(4))
+
 
     ### TODO: Loop until stream is over ###
+    # These are tuning values and others required for the counter logic:
+    
+    ## Tuning, could be asked as possible arguments:
+    LOWER_HALF = 0.7 # Fraction of total height a centroid is considered to be in the "lower half"
+    RIGHT_HALF = 0.8 # Fraction of total height a centroid is considered to be in the "right half". With 0.87 works but it is too extreme.
+    DETECTION_FRAMES = 1 # If current count_frame is divisible by this number, detection model is run.
 
+    count_frame = 0 # Frame counter.
+    status_lower_half = False # Status of the lower half.
+    status_upper_half = False # Status of the upper half.
+    id = 0 # Identifier for people.
+    current_person = [] # For storing current person in frame.
+    people_counter = 0 # People counter.
+    exits = 0 # Number of detected (people) exits.
+    while(True):
+    
         ### TODO: Read from the video capture ###
+        # Read the next frame:
+        flag, frame = input_stream.read()
 
-        ### TODO: Pre-process the image as needed ###
+        # Quit if there is no more stream:
+        if not flag:
+            break
 
-        ### TODO: Start asynchronous inference for specified request ###
+        # Quit if 'q' is pressed:
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-        ### TODO: Wait for the result ###
+        # Execute detection model if required in this frame:
+        if count_frame % DETECTION_FRAMES == 0:
 
-            ### TODO: Get the results of the inference request ###
+            ### TODO: Pre-process the image as needed ###
+            preprocessed_frame = utils.handle_image(frame, width=required_input_width, height=required_input_height)
+
+            ### TODO: Start asynchronous inference for specified request ###
+            infer_network.exec_net(preprocessed_frame)
+
+            ### TODO: Wait for the result ###
+            status = infer_network.wait()
+            if status == 0: # Wait until we have results.
+                prev_results = infer_network.extract_output() # Get outputs.
+
+                ### TODO: Get the results of the inference request ###
+                results_bb = []
+                for p_r in prev_results[0,0]: # Iterate over outputs.
+                    if p_r[2] > confidence and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
+                    results_bb.append(p_r[3:]) # Save those relevant results.
+
+
+                if len(results_bb) > 0:
+                
+                    for detection in results_bb: # Iterate through each detection (this algo is not suited for multidetection).
+                        centroid = calculate_centroid(detection)
+                        frame = draw_bounding_box(frame, detection)
+                        if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
+                            status_lower_half = True
+                            person = Person(id=id, frame_init = count_frame)
+                            current_person.append(person)
+                            people_counter = people_counter + 1
+                            id = id + 1
+                        else:
+                            if status_lower_half:
+                                status_lower_half = False
+                                status_upper_half = True
+                                current_person[0].frame_up = count_frame
+                        if centroid[0] > RIGHT_HALF and status_upper_half == True:
+                            exits = exits + 1
+                            status_lower_half = False
+                            status_upper_half = False
+                            time_spent = count_frame - current_person[-1].frame_init
+                            #current_person = [] # Depending if we need to have more log of people.
+                            print('This person id {} spent aprox {} seconds in screen.'.format(person.id, np.round(time_spent/fps,2)))
+
+
 
             ### TODO: Extract any desired stats from the results ###
 

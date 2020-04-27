@@ -100,21 +100,20 @@ def infer_on_stream(args, client):
     required_input_height = required_input_shape[3]
 
     ### TODO: Handle the input stream ###
-    if args.input != 'webcam':
+    print(args.input)
+    if args.input != 'CAM':
         # It seems that OpenCV can use VideoCapture to treat videos and images:
         input_stream = cv2.VideoCapture(args.input)
+        # We need fps for time calculation:
+        fps = input_stream.get(cv2.CAP_PROP_FPS)
 
     else:
         print('Using stream from webcam')
         input_stream = cv2.VideoCapture(0)
 
-    # We need fps for time calculation:
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
     # We also need input stream width and height:
     stream_width = int(input_stream.get(3))
-    stream_ height = int(input_stream.get(4))
-
+    stream_height = int(input_stream.get(4))
 
     ### TODO: Loop until stream is over ###
     # These are tuning values and others required for the counter logic:
@@ -129,8 +128,12 @@ def infer_on_stream(args, client):
     status_upper_half = False # Status of the upper half.
     id = 0 # Identifier for people.
     current_person = [] # For storing current person in frame.
-    people_counter = 0 # People counter.
-    exits = 0 # Number of detected (people) exits.
+
+    # Params to send to MQTT Server:
+    total_counted = 0 # People counter.
+    people_in_frame = 0
+    average_duration = 0
+
     while(True):
     
         ### TODO: Read from the video capture ###
@@ -162,46 +165,56 @@ def infer_on_stream(args, client):
                 ### TODO: Get the results of the inference request ###
                 results_bb = []
                 for p_r in prev_results[0,0]: # Iterate over outputs.
-                    if p_r[2] > confidence and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
-                    results_bb.append(p_r[3:]) # Save those relevant results.
+                    if p_r[2] >= args.prob_threshold and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
+                        results_bb.append(p_r[3:]) # Save those relevant results.
 
-
+                ### TODO: Extract any desired stats from the results ###
                 if len(results_bb) > 0:
                 
-                    for detection in results_bb: # Iterate through each detection (this algo is not suited for multidetection).
-                        centroid = calculate_centroid(detection)
-                        frame = draw_bounding_box(frame, detection)
+                    for detection in results_bb: # Iterate through each detection:
+                        centroid = utils.calculate_centroid(detection)
+                        frame = utils.draw_bounding_box(frame, detection)
                         if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
                             status_lower_half = True
-                            person = Person(id=id, frame_init = count_frame)
+                            person = utils.Person(id=id, frame_init = count_frame)
                             current_person.append(person)
-                            people_counter = people_counter + 1
+                            total_counted = total_counted + 1
+                            
                             id = id + 1
-                        else:
-                            if status_lower_half:
-                                status_lower_half = False
-                                status_upper_half = True
-                                current_person[0].frame_up = count_frame
+                        elif status_lower_half:
+                            status_lower_half = False
+                            status_upper_half = True
+                            current_person[0].frame_up = count_frame
+
+                        # To check that there is a detection in one of the halves:
+                        people_in_frame = status_upper_half + status_lower_half
+
                         if centroid[0] > RIGHT_HALF and status_upper_half == True:
-                            exits = exits + 1
                             status_lower_half = False
                             status_upper_half = False
-                            time_spent = count_frame - current_person[-1].frame_init
-                            #current_person = [] # Depending if we need to have more log of people.
-                            print('This person id {} spent aprox {} seconds in screen.'.format(person.id, np.round(time_spent/fps,2)))
-
-
-
-            ### TODO: Extract any desired stats from the results ###
-
-            ### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
-            ### Topic "person": keys of "count" and "total" ###
-            ### Topic "person/duration": key of "duration" ###
+                            people_in_frame = 0
+                            time_spent = (count_frame - current_person[0].frame_init)/fps
+                            current_person = []
+                            client.publish("person/duration", json.dumps({"duration": time_spent}))
+            
+        ### TODO: Calculate and send relevant information on ###
+        ### current_count, total_count and duration to the MQTT server ###
+        ### Topic "person": keys of "count" and "total" ###
+        ### Topic "person/duration": key of "duration" ###
+        client.publish("person", json.dumps({"count": people_in_frame, "total": total_counted}))
 
         ### TODO: Send the frame to the FFMPEG server ###
-
+        sys.stdout.buffer.write(frame)
         ### TODO: Write an output image if `single_image_mode` ###
+
+        count_frame = count_frame + 1
+
+    # Release resources:
+    input_stream.release()
+    cv2.destroyAllWindows()
+
+    # Disconnect from MQTT:
+    client.disconnect()
 
 
 def main():

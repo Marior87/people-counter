@@ -7,3 +7,9 @@ sitting-on-car.jpg
 fac.ffm
 webservice/server/package-lock.json
 webservice/ui/package-lock.json
+running-command.txt
+ejemplo-transformar.txt
+
+# Folders:
+tfmodels
+__pycache__

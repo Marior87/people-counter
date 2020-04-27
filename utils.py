@@ -6,7 +6,6 @@ class Person():
     """
     Class to manage detections instances.
     """
-    frame_up = 0 # Frame when enters the video.
 
     def __init__(self, id, frame_init):
         self.id = id

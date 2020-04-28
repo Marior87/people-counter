@@ -91,6 +91,45 @@ Note that you may need to do additional processing of the output to handle incor
 
 **If you are otherwise unable to find a suitable model after attempting and successfully converting at least three other models**, you can document in your write-up what the models were, how you converted them, and why they failed, and then utilize any of the Intel® Pre-Trained Models that may perform better.
 
+### Model Downloading and conversion:
+
+This app will use a SSDLITE TensorFlow model for people detection. For most situations the procedure will be the same for any type of SSD model.
+
+**Note:** Here we are using OpenVINO version 2019_R3.1. Keep in mind that some command line flags may change depending on your current version, please check the documentation at [Converting TensorFlow Object Detection API Models](https://docs.openvinotoolkit.org/2019_R3.1/_docs_MO_DG_prepare_model_convert_model_tf_specific_Convert_Object_Detection_API_Models.html) for more information.
+
+#### Step 1 - Download the model:
+
+```
+wget http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+```
+
+#### Step 2 - Decompress the model:
+```
+tar -xvzf ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+```
+
+#### Step 4 - Convert the model to IR:
+
+```
+<INSTALLATION_PATH>/deployment_tools/model_optimizer/mo_tf.py --input_model=ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb --tensorflow_use_custom_operations_config <INSTALLATION_PATH>/deployment_tools/model_optimizer/extensions/front/tf/ssd_v2_support.json --tensorflow_object_detection_api_pipeline_config ssdlite_mobilenet_v2_coco_2018_05_09/pipeline.config --reverse_input_channels
+```
+
+Usually, installation Path is:
+
+```
+/opt/intel/openvino
+```
+
+#### Step 5 - Save model files locations:
+
+Where you save resulting .xml and .bin generated files is up to you. But keep in mind that you will need the path to those files as parameter to run the application. In my case they are located at:
+
+```
+tfmodels/IR_ssdlite_mobilenet_v2_coco/frozen_inference_graph.xml
+tfmodels/IR_ssdlite_mobilenet_v2_coco/frozen_inference_graph.bin
+```
+
+
 ## Run the application
 
 From the main directory:

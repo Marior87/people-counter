@@ -114,7 +114,7 @@ class Network:
         ### Note: You may need to update the function parameters. ###
         return status
 
-    def extract_output(self, request_id=0):
+    def get_output(self, request_id=0):
         ### TODO: Extract and return the output results
         ### Note: You may need to update the function parameters. ###
         return self.net_plugin.requests[request_id].outputs[self.out_blob]

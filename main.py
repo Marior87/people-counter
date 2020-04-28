@@ -160,7 +160,7 @@ def infer_on_stream(args, client):
             ### TODO: Wait for the result ###
             status = infer_network.wait()
             if status == 0: # Wait until we have results.
-                prev_results = infer_network.extract_output() # Get outputs.
+                prev_results = infer_network.get_output() # Get outputs.
 
                 ### TODO: Get the results of the inference request ###
                 results_bb = []

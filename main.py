@@ -52,7 +52,7 @@ def build_argparser():
     parser.add_argument("-m", "--model", required=True, type=str,
                         help="Path to an xml file with a trained model.")
     parser.add_argument("-i", "--input", required=True, type=str,
-                        help="Path to image or video file. Use webcam to use webcam stream")
+                        help="Path to image or video file. Use CAM to use webcam stream")
     parser.add_argument("-l", "--cpu_extension", required=False, type=str,
                         default=None,
                         help="MKLDNN (CPU)-targeted custom layers."
@@ -100,16 +100,23 @@ def infer_on_stream(args, client):
     required_input_height = required_input_shape[3]
 
     ### TODO: Handle the input stream ###
-    print(args.input)
     if args.input != 'CAM':
         # It seems that OpenCV can use VideoCapture to treat videos and images:
         input_stream = cv2.VideoCapture(args.input)
-        # We need fps for time calculation:
+        length = int(input_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        # Check if input is an image or video file:
+        if length > 1:
+            single_image_mode = False
+        else:
+            single_image_mode = True
+
+        # We need fps for time related calculations:
         fps = input_stream.get(cv2.CAP_PROP_FPS)
 
     else:
-        print('Using stream from webcam')
         input_stream = cv2.VideoCapture(0)
+        single_image_mode = False
 
     # We also need input stream width and height:
     stream_width = int(input_stream.get(3))
@@ -128,13 +135,13 @@ def infer_on_stream(args, client):
     status_upper_half = False # Status of the upper half.
     id = 0 # Identifier for people.
     current_person = [] # For storing current person in frame.
+    current_time = [0] # For storing last recorded time.
 
     # Params to send to MQTT Server:
     total_counted = 0 # People counter.
-    people_in_frame = 0
-    average_duration = 0
+    people_in_frame = 0 # People in frame status.
 
-    while(True):
+    while(input_stream.isOpened()):
     
         ### TODO: Read from the video capture ###
         # Read the next frame:
@@ -170,21 +177,20 @@ def infer_on_stream(args, client):
 
                 ### TODO: Extract any desired stats from the results ###
                 if len(results_bb) > 0:
-                
+                    
                     for detection in results_bb: # Iterate through each detection:
                         centroid = utils.calculate_centroid(detection)
                         frame = utils.draw_bounding_box(frame, detection)
+
                         if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
                             status_lower_half = True
                             person = utils.Person(id=id, frame_init = count_frame)
                             current_person.append(person)
                             total_counted = total_counted + 1
-                            
                             id = id + 1
                         elif status_lower_half:
                             status_lower_half = False
                             status_upper_half = True
-                            current_person[0].frame_up = count_frame
 
                         # To check that there is a detection in one of the halves:
                         people_in_frame = status_upper_half + status_lower_half
@@ -193,9 +199,9 @@ def infer_on_stream(args, client):
                             status_lower_half = False
                             status_upper_half = False
                             people_in_frame = 0
-                            time_spent = (count_frame - current_person[0].frame_init)/fps
+                            current_time[0] = (count_frame - current_person[0].frame_init)/fps
                             current_person = []
-                            client.publish("person/duration", json.dumps({"duration": time_spent}))
+                            client.publish("person/duration", json.dumps({"duration": current_time[0]}))
             
         ### TODO: Calculate and send relevant information on ###
         ### current_count, total_count and duration to the MQTT server ###
@@ -203,11 +209,31 @@ def infer_on_stream(args, client):
         ### Topic "person/duration": key of "duration" ###
         client.publish("person", json.dumps({"count": people_in_frame, "total": total_counted}))
 
+        if people_in_frame:
+            current_time[0] = (count_frame - current_person[0].frame_init)/fps
+            if current_time[0] > 15:
+                font_color = (0,0,255)
+            else:
+                font_color = (0,0,0)
+            frame = utils.draw_text(frame,"Current person: "+str(current_time[0])+" secs",font_color=font_color)
+        else:
+            if current_time[0] > 15:
+                font_color = (0,0,255)
+            else:
+                font_color = (0,0,0)
+            frame = utils.draw_text(frame,"Last person: "+str(current_time[0])+" secs",font_color=font_color)
+
+        
         ### TODO: Send the frame to the FFMPEG server ###
         sys.stdout.buffer.write(frame)
-        ### TODO: Write an output image if `single_image_mode` ###
 
         count_frame = count_frame + 1
+
+        ### TODO: Write an output image if `single_image_mode` ###
+        if single_image_mode:
+            break
+        else:
+            continue
 
     # Release resources:
     input_stream.release()

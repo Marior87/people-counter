@@ -66,15 +66,13 @@ def draw_bounding_box(frame, detection, color =(0,255,0)):
     return img
 
 
-def draw_texts(frame, 
-                texts, 
-                results_bb, 
+def draw_text(frame, 
+                text, 
+                coordinates=(0.1,0.1), 
                 font = cv2.FONT_HERSHEY_SIMPLEX, 
-                font_size = 0.5, 
-                font_color = (255,255,255), 
-                font_thickness = 2,
-                offset_x = -50,
-                offset_y = -10):
+                font_size = 0.7, 
+                font_color = (0,0,0), 
+                font_thickness = 2):
     """
     Function to draw text over a bounding box.
 
@@ -93,17 +91,16 @@ def draw_texts(frame,
         img: Image with required text drawn.
     """
 
-    assert len(results_bb) == len(texts), "Number of bounding boxes ({}) not the same as number of texts ({})".format([len(results_bb), len(texts)])
+    #assert len(results_bb) == len(texts), "Number of bounding boxes ({}) not the same as number of texts ({})".format([len(results_bb), len(texts)])
     
     h = frame.shape[0]
     w = frame.shape[1]
 
     img = frame.copy()
 
-    for i in range(len(results_bb)):
-        xmin = int(results_bb[i][0]*w)
-        ymin = int(results_bb[i][1]*h)
+    x = int(coordinates[0]*w)
+    y = int(coordinates[1]*h)
 
-        img = cv2.putText(img, texts[i],(xmin+offset_x,ymin+offset_y), font, font_size, font_color, font_thickness)
+    img = cv2.putText(img, text,(x,y), font, font_size, font_color, font_thickness)
 
     return img

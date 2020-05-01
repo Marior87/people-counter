@@ -51,18 +51,17 @@ This account for around 27% improvement in inference time for the OpenVINO model
 
 In the following graphs we can see that this behaviour was maintained during all video analysis:
 
-<p alingn='center'>
-![Comparison_at_1](comparison_assets/inference_at_1.png)
+<p align="center">
+<img src="comparison_assets/Inference_at_1.png" width=500px height=350px/>
 </p>
 
-<p alingn='center'>
-![Comparison_at_10](comparison_assets/inference_at_1.png)
+<p align="center">
+<img src="comparison_assets/Inference_at_10.png" width=500px height=350px/>
 </p>
 
-<p alingn='center'>
-![Comparison_at_50](comparison_assets/inference_at_1.png)
+<p align="center">
+<img src="comparison_assets/Inference_at_50.png" width=500px height=350px/>
 </p>
-
 
 
 ## Assess Model Use Cases

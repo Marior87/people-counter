@@ -18,14 +18,52 @@ The result of the Model Optimizer conversion of a model with (or without) Custom
 
 ## Comparing Model Performance
 
-My method(s) to compare models before and after conversion to Intermediate Representations
-were...
+For model comparison, I choose different approachs for each of the following metrics, as they need to be evaluated on their own:
 
-The difference between model accuracy pre- and post-conversion was...
+### Accuracy:
 
-The size of the model pre- and post-conversion was...
+As far as with my app is related, both TensorFlow model and converted OpenVINO one perform exactly the same. This is mostly because the logic I used inside the app tries to be "tolerant" with misdetections.
 
-The inference time of the model pre- and post-conversion was...
+### Model Size:
+
+| Model           | Size (MB)          |
+|:-----------------------:|:---------------:|
+| TensorFlow |  20.7 |
+| IR OpenVINO |  17.9 |
+
+This means OpenVINO model is around 13.5% smaller, a great improvement considering usual memory restrictions in IoT devices.
+
+### Inference Time:
+
+**Processor Characteristics**: Intel® Core i5-3230M @2.6 GHz Ivy Bridge (3rd Generation)
+
+I created a small script to measure each model average inference time at different frecuencies:
+
+**Note:** As TensorFlow took too much time to make first inference, I decided to only take into account starting from the second one, this to avoid any comparison error related with models internal configurations.
+
+| Frequency   | TensorFlow Avg Time (secs) | OpenVINO Avg Time (secs)|
+|:-----------------------:|:---------------:|:---------------:|
+| 1 (each frame) |  0.09248 | 0.06641 |
+| 10 |  0.09043 | 0.06546 |
+| 50 |  0.08885 | 0.06604 |
+
+This account for around 27% improvement in inference time for the OpenVINO model over pure TensorFlow.
+
+In the following graphs we can see that this behaviour was maintained during all video analysis:
+
+<p alingn='center'>
+![Comparison_at_1](comparison_assets/inference_at_1.png)
+</p>
+
+<p alingn='center'>
+![Comparison_at_10](comparison_assets/inference_at_1.png)
+</p>
+
+<p alingn='center'>
+![Comparison_at_50](comparison_assets/inference_at_1.png)
+</p>
+
+
 
 ## Assess Model Use Cases
 

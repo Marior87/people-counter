@@ -101,18 +101,22 @@ def infer_on_stream(args, client):
 
     ### TODO: Handle the input stream ###
     if args.input != 'CAM':
-        # It seems that OpenCV can use VideoCapture to treat videos and images:
-        input_stream = cv2.VideoCapture(args.input)
-        length = int(input_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+        try:
+            # It seems that OpenCV can use VideoCapture to treat videos and images:
+            input_stream = cv2.VideoCapture(args.input)
+            length = int(input_stream.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        # Check if input is an image or video file:
-        if length > 1:
-            single_image_mode = False
-        else:
-            single_image_mode = True
+            # Check if input is an image or video file:
+            if length > 1:
+                single_image_mode = False
+            else:
+                single_image_mode = True
 
-        # We need fps for time related calculations:
-        fps = input_stream.get(cv2.CAP_PROP_FPS)
+            # We need fps for time related calculations:
+            fps = input_stream.get(cv2.CAP_PROP_FPS)
+        except:
+            print('Not supported image or video file format. Please pass a supported one.')
+            exit()
 
     else:
         input_stream = cv2.VideoCapture(0)
@@ -122,121 +126,140 @@ def infer_on_stream(args, client):
     stream_width = int(input_stream.get(3))
     stream_height = int(input_stream.get(4))
 
-    ### TODO: Loop until stream is over ###
-    # These are tuning values and others required for the counter logic:
-    
-    ## Tuning, could be asked as possible arguments:
-    LOWER_HALF = 0.7 # Fraction of total height a centroid is considered to be in the "lower half"
-    RIGHT_HALF = 0.8 # Fraction of total height a centroid is considered to be in the "right half". With 0.87 works but it is too extreme.
-    DETECTION_FRAMES = 1 # If current count_frame is divisible by this number, detection model is run.
 
-    count_frame = 0 # Frame counter.
-    status_lower_half = False # Status of the lower half.
-    status_upper_half = False # Status of the upper half.
-    id = 0 # Identifier for people.
-    current_person = [] # For storing current person in frame.
-    current_time = [0] # For storing last recorded time.
-
-    # Params to send to MQTT Server:
-    total_counted = 0 # People counter.
-    people_in_frame = 0 # People in frame status.
-
-    while(input_stream.isOpened()):
-    
-        ### TODO: Read from the video capture ###
-        # Read the next frame:
-        flag, frame = input_stream.read()
-
-        # Quit if there is no more stream:
-        if not flag:
-            break
-
-        # Quit if 'q' is pressed:
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-        # Execute detection model if required in this frame:
-        if count_frame % DETECTION_FRAMES == 0:
-
-            ### TODO: Pre-process the image as needed ###
-            preprocessed_frame = utils.handle_image(frame, width=required_input_width, height=required_input_height)
-
-            ### TODO: Start asynchronous inference for specified request ###
-            infer_network.exec_net(preprocessed_frame)
-
-            ### TODO: Wait for the result ###
-            status = infer_network.wait()
-            if status == 0: # Wait until we have results.
-                prev_results = infer_network.get_output() # Get outputs.
-
-                ### TODO: Get the results of the inference request ###
-                results_bb = []
-                for p_r in prev_results[0,0]: # Iterate over outputs.
-                    if p_r[2] >= args.prob_threshold and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
-                        results_bb.append(p_r[3:]) # Save those relevant results.
-
-                ### TODO: Extract any desired stats from the results ###
-                if len(results_bb) > 0:
-                    
-                    for detection in results_bb: # Iterate through each detection:
-                        centroid = utils.calculate_centroid(detection)
-                        frame = utils.draw_bounding_box(frame, detection)
-
-                        if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
-                            status_lower_half = True
-                            person = utils.Person(id=id, frame_init = count_frame)
-                            current_person.append(person)
-                            total_counted = total_counted + 1
-                            id = id + 1
-                        elif status_lower_half:
-                            status_lower_half = False
-                            status_upper_half = True
-
-                        # To check that there is a detection in one of the halves:
-                        people_in_frame = status_upper_half + status_lower_half
-
-                        if centroid[0] > RIGHT_HALF and status_upper_half == True:
-                            status_lower_half = False
-                            status_upper_half = False
-                            people_in_frame = 0
-                            current_time[0] = (count_frame - current_person[0].frame_init)/fps
-                            current_person = []
-                            client.publish("person/duration", json.dumps({"duration": current_time[0]}))
-            
-        ### TODO: Calculate and send relevant information on ###
-        ### current_count, total_count and duration to the MQTT server ###
-        ### Topic "person": keys of "count" and "total" ###
-        ### Topic "person/duration": key of "duration" ###
-        client.publish("person", json.dumps({"count": people_in_frame, "total": total_counted}))
-
-        if people_in_frame:
-            current_time[0] = (count_frame - current_person[0].frame_init)/fps
-            if current_time[0] > 15:
-                font_color = (0,0,255)
-            else:
-                font_color = (0,0,0)
-            frame = utils.draw_text(frame,"Current person: "+str(current_time[0])+" secs",font_color=font_color)
-        else:
-            if current_time[0] > 15:
-                font_color = (0,0,255)
-            else:
-                font_color = (0,0,0)
-            frame = utils.draw_text(frame,"Last person: "+str(current_time[0])+" secs",font_color=font_color)
-
+    if not single_image_mode:
+        ### TODO: Loop until stream is over ###
+        # These are tuning values and others required for the counter logic:
         
-        ### TODO: Send the frame to the FFMPEG server ###
-        sys.stdout.buffer.write(frame)
+        ## Tuning, could be asked as possible arguments:
+        LOWER_HALF = 0.7 # Fraction of total height a centroid is considered to be in the "lower half"
+        RIGHT_HALF = 0.8 # Fraction of total height a centroid is considered to be in the "right half". With 0.87 works but it is too extreme.
+        DETECTION_FRAMES = 1 # If current count_frame is divisible by this number, detection model is run.
 
-        count_frame = count_frame + 1
+        count_frame = 0 # Frame counter.
+        status_lower_half = False # Status of the lower half.
+        status_upper_half = False # Status of the upper half.
+        id = 0 # Identifier for people.
+        current_person = [] # For storing current person in frame.
+        current_time = [0] # For storing last recorded time.
 
-        ### TODO: Write an output image if `single_image_mode` ###
-        if single_image_mode:
-            break
-        else:
-            continue
+        # Params to send to MQTT Server:
+        total_counted = 0 # People counter.
+        people_in_frame = 0 # People in frame status.
 
-    # Release resources:
-    input_stream.release()
+        while(input_stream.isOpened()):
+        
+            ### TODO: Read from the video capture ###
+            # Read the next frame:
+            flag, frame = input_stream.read()
+
+            # Quit if there is no more stream:
+            if not flag:
+                break
+
+            # Quit if 'q' is pressed:
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            # Execute detection model if required in this frame:
+            if count_frame % DETECTION_FRAMES == 0:
+
+                ### TODO: Pre-process the image as needed ###
+                preprocessed_frame = utils.handle_image(frame, width=required_input_width, height=required_input_height)
+
+                ### TODO: Start asynchronous inference for specified request ###
+                infer_network.exec_net(preprocessed_frame)
+
+                ### TODO: Wait for the result ###
+                status = infer_network.wait()
+                if status == 0: # Wait until we have results.
+                    prev_results = infer_network.get_output() # Get outputs.
+
+                    ### TODO: Get the results of the inference request ###
+                    results_bb = []
+                    for p_r in prev_results[0,0]: # Iterate over outputs.
+                        if p_r[2] >= args.prob_threshold and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
+                            results_bb.append(p_r[3:]) # Save those relevant results.
+
+                    ### TODO: Extract any desired stats from the results ###
+                    if len(results_bb) > 0:
+                        
+                        for detection in results_bb: # Iterate through each detection:
+                            centroid = utils.calculate_centroid(detection)
+                            frame = utils.draw_bounding_box(frame, detection)
+
+                            if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
+                                status_lower_half = True
+                                person = utils.Person(id=id, frame_init = count_frame)
+                                current_person.append(person)
+                                total_counted = total_counted + 1
+                                id = id + 1
+                            elif status_lower_half:
+                                status_lower_half = False
+                                status_upper_half = True
+
+                            # To check that there is a detection in one of the halves:
+                            people_in_frame = status_upper_half + status_lower_half
+
+                            if centroid[0] > RIGHT_HALF and status_upper_half == True:
+                                status_lower_half = False
+                                status_upper_half = False
+                                people_in_frame = 0
+                                current_time[0] = (count_frame - current_person[0].frame_init)/fps
+                                current_person = []
+                                client.publish("person/duration", json.dumps({"duration": current_time[0]}))
+                
+            ### TODO: Calculate and send relevant information on ###
+            ### current_count, total_count and duration to the MQTT server ###
+            ### Topic "person": keys of "count" and "total" ###
+            ### Topic "person/duration": key of "duration" ###
+            client.publish("person", json.dumps({"count": people_in_frame, "total": total_counted}))
+
+            # Additional feature: Change timer color when a person is more than 15 secs on screen.
+            if people_in_frame:
+                current_time[0] = (count_frame - current_person[0].frame_init)/fps
+                if current_time[0] > 15:
+                    font_color = (0,0,255)
+                else:
+                    font_color = (0,0,0)
+                frame = utils.draw_text(frame,"Current person: "+str(current_time[0])+" secs",font_color=font_color)
+            else:
+                if current_time[0] > 15:
+                    font_color = (0,0,255)
+                else:
+                    font_color = (0,0,0)
+                frame = utils.draw_text(frame,"Last person: "+str(current_time[0])+" secs",font_color=font_color)
+
+            
+            ### TODO: Send the frame to the FFMPEG server ###
+            sys.stdout.buffer.write(frame)
+
+            count_frame = count_frame + 1
+
+        # Release resources:
+        input_stream.release()
+    else:
+        flag, frame = input_stream.read()
+        preprocessed_frame = utils.handle_image(frame, width=required_input_width, height=required_input_height)
+
+        infer_network.exec_net(preprocessed_frame)
+
+        status = infer_network.wait()
+        if status == 0: # Wait until we have results.
+            prev_results = infer_network.get_output() # Get outputs.
+
+            results_bb = []
+            for p_r in prev_results[0,0]: # Iterate over outputs.
+                if p_r[2] >= args.prob_threshold and p_r[1]==1.0: # Filter relevant outputs. p_r[1]==1: check only for people.
+                    results_bb.append(p_r[3:]) # Save those relevant results.
+
+            if len(results_bb) > 0:
+                for detection in results_bb: # Iterate through each detection:
+                    frame = utils.draw_bounding_box(frame, detection)
+
+            frame = utils.draw_text(frame,"People in Frame: "+str(len(results_bb)),coordinates=(0.05, 0.05))
+            cv2.imwrite('result_single_image.png', frame)
+
     cv2.destroyAllWindows()
 
     # Disconnect from MQTT:

@@ -105,6 +105,7 @@ def infer_on_stream(args, client):
             # It seems that OpenCV can use VideoCapture to treat videos and images:
             input_stream = cv2.VideoCapture(args.input)
             length = int(input_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+            webcamera = False
 
             # Check if input is an image or video file:
             if length > 1:
@@ -112,8 +113,6 @@ def infer_on_stream(args, client):
             else:
                 single_image_mode = True
 
-            # We need fps for time related calculations:
-            fps = input_stream.get(cv2.CAP_PROP_FPS)
         except:
             print('Not supported image or video file format. Please pass a supported one.')
             exit()
@@ -121,11 +120,14 @@ def infer_on_stream(args, client):
     else:
         input_stream = cv2.VideoCapture(0)
         single_image_mode = False
+        webcamera = True
+
+    # We need fps for time related calculations:
+    fps = input_stream.get(cv2.CAP_PROP_FPS)
 
     # We also need input stream width and height:
     stream_width = int(input_stream.get(3))
     stream_height = int(input_stream.get(4))
-
 
     if not single_image_mode:
         ### TODO: Loop until stream is over ###
@@ -232,7 +234,10 @@ def infer_on_stream(args, client):
 
             
             ### TODO: Send the frame to the FFMPEG server ###
-            sys.stdout.buffer.write(frame)
+            if not webcamera:
+                sys.stdout.buffer.write(frame)
+            else:
+                cv2.imshow('Resultado', frame)
 
             count_frame = count_frame + 1
 

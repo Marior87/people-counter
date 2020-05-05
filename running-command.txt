@@ -18,7 +18,8 @@ Open a new terminal
 Source a proper python environment with 'requirements.txt' installed and with OpenVINO.
 
 For defined video file run:
-python main.py -i resources/Pedestrian_Detect_2_1_1.mp4 -m tfmodels/IR_ssdlite_mobilenet_v2_coco/frozen_inference_graph.xml -l /opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so -d CPU -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://localhost:3004/fac.ffm
+SSDLITE Model: python main.py -i resources/Pedestrian_Detect_2_1_1.mp4 -m tfmodels/IR_ssdlite_mobilenet_v2_coco/frozen_inference_graph.xml -l /opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so -d CPU -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://localhost:3004/fac.ffm
+FASTER RCNN MODEL: python main.py -i resources/Pedestrian_Detect_2_1_1.mp4 -m tfmodels/IR_faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.xml -l /opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so -d CPU -pt 0.5 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://localhost:3004/fac.ffm
 
 For defined image run:
 python main.py -i resources/sitting-on-car.jpg -m tfmodels/IR_ssdlite_mobilenet_v2_coco/frozen_inference_graph.xml -l /opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so -d CPU -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://localhost:3004/fac.ffm

@@ -92,15 +92,21 @@ class Network:
         return self.plugin
 
 
-    def get_input_shape(self):
+    def get_input_shape(self, faster_rnn=False):
         ### TODO: Return the shape of the input layer ###
-        return self.net.inputs[self.input_blob].shape
+        if not faster_rnn:
+            return self.net.inputs[self.input_blob].shape
+        else:
+            return self.net.inputs['image_tensor'].shape
 
 
-    def exec_net(self, frame, request_id=0):
+    def exec_net(self, frame, request_id=0, faster_rnn=False):
         ### TODO: Start an asynchronous request ###
-        self.infer_request_handle = self.net_plugin.start_async(request_id=request_id, inputs={self.input_blob: frame})
-        
+        if not faster_rnn:
+            self.infer_request_handle = self.net_plugin.start_async(request_id=request_id, inputs={self.input_blob: frame})
+        else:
+            self.infer_request_handle = self.net_plugin.start_async(request_id=request_id, inputs={'image_tensor': frame,'image_info': frame.shape[1:]})
+
         ### TODO: Return any necessary information ###
         ### Note: You may need to update the function parameters. ###
         return self.net_plugin

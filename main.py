@@ -91,11 +91,16 @@ def infer_on_stream(args, client):
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
+    if 'faster' in args.model:
+        faster_rnn = True
+    else:
+        faster_rnn = False
+
     ### TODO: Load the model through `infer_network` ###
     infer_network.load_model(args.model, device=args.device, cpu_extension=args.cpu_extension)
 
     # We need model required input dimensions:
-    required_input_shape = infer_network.get_input_shape()
+    required_input_shape = infer_network.get_input_shape(faster_rnn=faster_rnn)
     required_input_width = required_input_shape[2]
     required_input_height = required_input_shape[3]
 
@@ -129,13 +134,16 @@ def infer_on_stream(args, client):
     stream_width = int(input_stream.get(3))
     stream_height = int(input_stream.get(4))
 
+    not_in_frame = 0 # Counter for Faster RNN:
+    frames_for_quit = 10 # Number of consecutive frames we wait until we consider a person is completly out of frame.
+
     if not single_image_mode:
         ### TODO: Loop until stream is over ###
         # These are tuning values and others required for the counter logic:
         
         ## Tuning, could be asked as possible arguments:
         LOWER_HALF = 0.7 # Fraction of total height a centroid is considered to be in the "lower half"
-        RIGHT_HALF = 0.8 # Fraction of total height a centroid is considered to be in the "right half". With 0.87 works but it is too extreme.
+        RIGHT_HALF = 0.8 # Fraction of total width a centroid is considered to be in the "right half". With 0.87 works but it is too extreme.
         DETECTION_FRAMES = 1 # If current count_frame is divisible by this number, detection model is run.
 
         count_frame = 0 # Frame counter.
@@ -170,7 +178,7 @@ def infer_on_stream(args, client):
                 preprocessed_frame = utils.handle_image(frame, width=required_input_width, height=required_input_height)
 
                 ### TODO: Start asynchronous inference for specified request ###
-                infer_network.exec_net(preprocessed_frame)
+                infer_network.exec_net(preprocessed_frame, faster_rnn=faster_rnn)
 
                 ### TODO: Wait for the result ###
                 status = infer_network.wait()
@@ -184,33 +192,57 @@ def infer_on_stream(args, client):
                             results_bb.append(p_r[3:]) # Save those relevant results.
 
                     ### TODO: Extract any desired stats from the results ###
-                    if len(results_bb) > 0:
-                        
-                        for detection in results_bb: # Iterate through each detection:
-                            centroid = utils.calculate_centroid(detection)
-                            frame = utils.draw_bounding_box(frame, detection)
+                    if not faster_rnn:# Faster RNN has better detection capabilities, not necessary to porcess the same way.
+                        if len(results_bb) > 0:
+                            for detection in results_bb: # Iterate through each detection:
+                                centroid = utils.calculate_centroid(detection)
+                                frame = utils.draw_bounding_box(frame, detection)
 
-                            if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
-                                status_lower_half = True
+                                if centroid[1] > LOWER_HALF and status_lower_half == False and status_upper_half == False: # Meaning there is a new detection in the lower border.
+                                    status_lower_half = True
+                                    person = utils.Person(id=id, frame_init = count_frame)
+                                    current_person.append(person)
+                                    total_counted = total_counted + 1
+                                    id = id + 1
+                                elif status_lower_half:
+                                    status_lower_half = False
+                                    status_upper_half = True
+
+                                # To check that there is a detection in one of the halves:
+                                people_in_frame = status_upper_half + status_lower_half
+
+                                if centroid[0] > RIGHT_HALF and status_upper_half == True:
+                                    status_lower_half = False
+                                    status_upper_half = False
+                                    people_in_frame = 0
+                                    current_time[0] = (count_frame - current_person[0].frame_init)/fps
+                                    
+                                    current_person = []
+                                    client.publish("person/duration", json.dumps({"duration": current_time[0]}))
+                    else: # Using Faster RNN Model:
+                        if len(results_bb) == 0:
+                            not_in_frame = not_in_frame + 1
+                            if not_in_frame >= frames_for_quit and current_person:
+                                not_in_frame = 0
+                                people_in_frame = 0
+                                if current_person:
+                                    # Substracting 'frames_for_quit' because we stopped detecting this person those "frames ago"
+                                    current_time[0] = (count_frame - current_person[0].frame_init - frames_for_quit)/fps
+                                current_person = []
+                                client.publish("person/duration", json.dumps({"duration": current_time[0]}))
+                        else:
+                            people_in_frame = 1
+                            not_in_frame = 0
+                            for detection in results_bb: # Iterate through each detection:
+                                frame = utils.draw_bounding_box(frame, detection)
+
+                            if not current_person:# Meaning that there is no recorded person.
                                 person = utils.Person(id=id, frame_init = count_frame)
                                 current_person.append(person)
                                 total_counted = total_counted + 1
                                 id = id + 1
-                            elif status_lower_half:
-                                status_lower_half = False
-                                status_upper_half = True
+                            
 
-                            # To check that there is a detection in one of the halves:
-                            people_in_frame = status_upper_half + status_lower_half
-
-                            if centroid[0] > RIGHT_HALF and status_upper_half == True:
-                                status_lower_half = False
-                                status_upper_half = False
-                                people_in_frame = 0
-                                current_time[0] = (count_frame - current_person[0].frame_init)/fps
-                                current_person = []
-                                client.publish("person/duration", json.dumps({"duration": current_time[0]}))
-                
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###

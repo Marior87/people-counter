@@ -10,5 +10,7 @@ ejemplo-transformar.txt
 compare_models.py
 
 # Folders:
-tfmodels
+faster_rcnn_inception_v2_coco_2018_01_28
+ssdlite_mobilenet_v2_coco_2018_05_09
+ssd_inception_v2_coco_2018_01_28
 __pycache__

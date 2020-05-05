@@ -71,13 +71,10 @@ class Network:
 
             ### TODO: Add any necessary extensions ###
             if len(not_supported_layers) != 0:
-                log.error("Following layers are not supported by "
-                          "the plugin for specified device {}:\n {}".
-                          format(device,
-                                 ', '.join(not_supported_layers)))
-                log.error("Please try to specify cpu extensions library path"
-                          " in command line parameters using -l "
-                          "or --cpu_extension command line argument")
+                log.error("Following layers are not supported by the plugin for specified device {}:\n {}".
+                          format(device,', '.join(not_supported_layers)))
+                log.error("Please try to specify another cpu extension library path (via -l or --cpu_extension command line parameters)"
+                          " that support required model layers or try, in last case, with other model")
                 sys.exit(1)
 
         # Load the model to the network:

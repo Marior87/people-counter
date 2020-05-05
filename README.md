@@ -114,7 +114,7 @@ tar -xvzf ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
 <INSTALLATION_PATH>/deployment_tools/model_optimizer/mo_tf.py --input_model=ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb --tensorflow_use_custom_operations_config <INSTALLATION_PATH>/deployment_tools/model_optimizer/extensions/front/tf/ssd_v2_support.json --tensorflow_object_detection_api_pipeline_config ssdlite_mobilenet_v2_coco_2018_05_09/pipeline.config --reverse_input_channels
 ```
 
-Usually, installation Path is:
+Usually, <INSTALLATION_PATH> is:
 
 ```
 /opt/intel/openvino

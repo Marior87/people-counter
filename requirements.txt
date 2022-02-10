@@ -29,7 +29,7 @@ python-dateutil==2.8.1
 requests==2.23.0
 six==1.14.0
 tensorboard==1.14.0
-tensorflow==1.14.0
+tensorflow==2.5.3
 tensorflow-estimator==1.14.0
 termcolor==1.1.0
 typing-extensions==3.7.4.2

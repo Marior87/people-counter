@@ -19,7 +19,7 @@ matplotlib==3.2.1
 mxnet==1.5.1
 networkx==2.4
 numpy==1.18.3
-onnx==1.6.0
+onnx==1.13.0
 opencv-python==4.2.0.34
 paho-mqtt==1.5.0
 pkg-resources==0.0.0
